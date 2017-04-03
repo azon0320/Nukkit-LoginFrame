@@ -1,0 +1,8 @@
+name: LoginFrame
+main: dor.Login
+version: "1.0.0"
+api: ["1.0.0"]
+
+load: POSTWORLD
+author: dormao
+description: LoginFrame of Nukkit
