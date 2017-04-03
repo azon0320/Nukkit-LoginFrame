@@ -38,4 +38,8 @@ public class Login extends PluginBase{
       c.setAll(datas);
       c.save();
   }
+  
+  public boolean isLogined(Player p){
+    return false;  
+  }
 }
