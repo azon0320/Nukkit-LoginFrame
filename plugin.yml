@@ -1,5 +1,5 @@
 name: LoginFrame
-main: dor.Login
+main: zon.login.Login
 version: "1.0.0"
 api: ["1.0.0"]
 
