@@ -15,7 +15,6 @@ import cn.nukkit.event.player.PlayerCommandPreprocessEvent;
 
 /**
   * Zon Project
-  * Zon Network内部开发代码，请勿使用
   */
 
 public class Login extends PluginBase implements Listener{
@@ -72,7 +71,7 @@ public class Login extends PluginBase implements Listener{
   @EventHandler(priority = EventHandler.NORMAL, ignoreCancelled = true)
   public void onPlayerJoin(PlayerJoinEVent e){
     if(auth.isLogged(e.getPlayer().getName().toLowerCase())) return;
-    e.getPlayer().teleport(level.getSafeSpawn());
+    e.getPlayer().teleport(level.getSpawnLocation());
   }
   
   @EventHandler(priority = EventHandler.NORMAL, ignoreCancelled = true)
