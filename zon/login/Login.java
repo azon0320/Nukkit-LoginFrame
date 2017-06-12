@@ -99,7 +99,7 @@ public class Login extends PluginBase implements Listener{
               return "公告按钮";
           case 2:
               return "隐藏按钮";
-          case 4:
+          case 3:
               return "跳跃按钮";
           default:
               return "不知从哪来的按钮";
