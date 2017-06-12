@@ -1,6 +1,8 @@
 # Nukkit-LoginFrame
 azon
-
+<br />
+TODOs:<br />
+> * 修复SQL语句存储
 ---
 ##介绍
 > * 这是一个提供了ClientID登录接口的Nukkit插件
