@@ -4,6 +4,8 @@ import cn.nukkit.command.CommandSender;
 import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.block.BlockBreakEvent;
 import cn.nukkit.event.block.BlockPlaceEvent;
+import cn.nukkit.event.entity.EntityDamageByEntityEvent;
+import cn.nukkit.event.entity.EntityDamageEvent;
 import cn.nukkit.event.entity.EntityTeleportEvent;
 import cn.nukkit.event.player.*;
 import cn.nukkit.utils.Config;
@@ -30,6 +32,9 @@ import cn.nukkit.level.particle.FloatingTextParticle;
 /**
   * Zon Project
   * azon
+  *
+  * TODO Nukkit未来将不提供Config API Config需要重写
+  *
   */
 
 public class Login extends PluginBase implements Listener{
@@ -72,6 +77,10 @@ public class Login extends PluginBase implements Listener{
   public final int EGG_JUMP = 3;
   
   public final int EGG_UNKNOWN = 99;
+
+
+  /** 蹲坑超一定时间踢出 */
+  public final int MAX_DELAY = 2*60;
   
   private static Login instance;
   
@@ -84,6 +93,7 @@ public class Login extends PluginBase implements Listener{
   private Level stage;
   private Vector3[] buttons;
   private Map<String, String> tips;
+  private Map<String, Integer> times;
 
   /**
    * 即时按钮值
@@ -153,21 +163,29 @@ public class Login extends PluginBase implements Listener{
         public void onRun(int currentTick) {
             getOwner().tick();
         }
-    }, 18);
+    }, 15);
     getServer().getCommandMap().register("LevelLogin" ,new LCommand(this));
-    tips = new HashMap<String, String>();
-    level.addParticle(new FloatingTextParticle(buttons[0], "§b[§a登录§b]"));
-    level.addParticle(new FloatingTextParticle(buttons[1], "§b[§f公告§b]"));
+    tips = new HashMap<>();
+    times = new HashMap<String, Integer>();
     currentButton = -1;
     getLogger().info("加载成功");
   }
 
+  /**
+   * 客户端加载过程中会抛出NullPointerException
+   * 每隔一段时间执行的函数故无需解决漏包问题
+   * */
   public void tick(){
       for(Player p : getServer().getOnlinePlayers().values()){
-          if(p.isOnline()){
+          String n = p.getName().toLowerCase();
+          if(isLogged(n)) continue;
+          if(times.get(n) < 1){
+              p.kick();
+          }else {
+              times.put(n, times.get(n) - 1);
               try {
-                  p.sendTip(tips.get(p.getName().toLowerCase()));
-              }catch(Exception e){}
+                  p.sendTip(tips.get(n) + "\n§c你将在 §f" + times.get(n) + " §cs后被踢出");
+              } catch (Exception e) {}
           }
       }
   }
@@ -203,15 +221,42 @@ public class Login extends PluginBase implements Listener{
       if(tips.get(k) != null) tips.remove(k);
   }
   
-  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = false)
-  public void onPlayerJoin(PlayerJoinEvent e){
-    putTip(e.getPlayer().getName().toLowerCase(), "§f如有疑问，请联系管理员\n§a点击§d各种§b按钮§f寻找§e彩蛋~");
+  @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+  public void onPlayerPreJoin(PlayerPreLoginEvent e){
+    putTip(e.getPlayer().getName().toLowerCase(), getConfig().getString("bottom_text"));
+    times.put(e.getPlayer().getName().toLowerCase(), MAX_DELAY);
   }
 
-  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = false)
   public void onPlayerSpawn(PlayerRespawnEvent e){
       if(isLogged(e.getPlayer().getName().toLowerCase())) return;
       e.setRespawnPosition(level.getSpawnLocation());
+  }
+
+  /**隐藏后无法重新显示 , 放弃*/
+  @Deprecated
+  private void hidePlayer(Player p){
+      for(Player pl : getServer().getOnlinePlayers().values()){
+          if(pl.isOnline()){
+              pl.hidePlayer(p);
+          }
+      }
+  }
+
+  /** 无法显示, 放弃 */
+  @Deprecated
+  private void showPlayer(Player p){
+      for(Player pl : getServer().getOnlinePlayers().values()){
+          if(pl.isOnline()){
+              pl.showPlayer(p);
+          }
+      }
+  }
+
+  @EventHandler
+  public void onPlayerJoinEven(PlayerJoinEvent e){
+      level.addParticle(new FloatingTextParticle(buttons[0].add(0.5, 0.5, 1.5), "","§b[§a登录§b]"), e.getPlayer());
+      level.addParticle(new FloatingTextParticle(buttons[1].add(0.5, 0.5, 1.5), "", "§b[§f公告§b]"), e.getPlayer());
   }
 
   @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -221,8 +266,13 @@ public class Login extends PluginBase implements Listener{
   
   @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
   public void onCmdPreprocess(PlayerCommandPreprocessEvent e){
-    if(isLogged(e.getPlayer().getName().toLowerCase())) return;
+    if(isLogged(e.getPlayer().getName().toLowerCase()) || e.getPlayer().isOp()) return;
     e.setCancelled(true);
+  }
+
+  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+  public void onEntityAttack(EntityDamageEvent e){
+      if(e.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK && e.getEntity().getLevel().getFolderName().equals(level.getFolderName())) e.setCancelled();
   }
 
   @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -239,37 +289,24 @@ public class Login extends PluginBase implements Listener{
       }
   }
   
-  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
+  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = false)
   public void onPlayerClick(PlayerInteractEvent e){
-      if(e.getPlayer().isOp()) {
-          if(e.getBlock().getId() == Block.WOODEN_BUTTON){
-              if(currentButton != -1){
+      /** e.getPlayer().sendMessage("§f[debug]你点击了" + e.getBlock().getId()); */
+      if(isLogged(e.getPlayer().getName().toLowerCase())) return;
+          if(e.getBlock().getId() == Block.WOODEN_BUTTON) {
+              if (currentButton != -1 && e.getPlayer().isOp()) {
                   Block b = e.getBlock();
                   buttons[currentButton] = new Vector3(b.getX(), b.getY(), b.getZ());
                   currentButton = -1;
+                  //getConfig().get("success_setting_button")
                   e.getPlayer().sendMessage("§a设置按钮成功");
+              } else {
+                  handle(e);
               }
           }else{
-              e.setCancelled();
-          }
-      }else {
-          if (isLogged(e.getPlayer().getName().toLowerCase())) return;
-          if (e.getBlock().getId() == Block.WOODEN_BUTTON) {
-              handle(e);
-          }
           e.setCancelled();
       }
   }
-
-  @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
-  public void onPlayerPreLoginEvent(PlayerPreLoginEvent e){
-        if(auth.isRegistered(e.getPlayer().getName().toLowerCase())){
-            String n = e.getPlayer().getName().toLowerCase();
-            if(!auth.verify(n, String.valueOf(e.getPlayer().getClientId()))){
-                e.setKickMessage("§c玩家处于在线状态\n§f如有疑问，请联系管理员");
-            }
-        }
-    }
   
   private void handle(PlayerInteractEvent e){
     int lock = 99;
@@ -281,9 +318,12 @@ public class Login extends PluginBase implements Listener{
     }
     switch(lock){
       case LOGIN_BUTTON:
+          //getConfig().getString("text_verifying")
+          e.getPlayer().sendMessage("§a[Net]Verifying...");
         doLogin(e.getPlayer());
         return;
       case GET_INFO:
+         /** e.getPlayer().sendMessage("§a[Net]getting Info"); */
         doSendInfo(e.getPlayer(), getConfig().getString("info"));
         return;
       case EGG_INVISIBLE:
@@ -301,15 +341,22 @@ public class Login extends PluginBase implements Listener{
   private void doLogin(Player p){
       String n = p.getName().toLowerCase();
       deleteTip(p.getName().toLowerCase());
+      times.remove(n);
       if(auth.isRegistered(n)) {
           if (auth.verify(n, String.valueOf(p.getClientId()))) {
-              p.sendTip("§a你已登录成功,传送你到" + stage.getFolderName());
+              //getConfig().getString("success_verify")
+              //getConfig().getString("tip_success_teleport");
+              p.sendMessage("§a[Net]验证成功");
+              p.sendTip("§a你已登录成功,传送你到主大厅 > " + stage.getFolderName());
+              //showPlayer(p);
               p.teleport(stage.getSpawnLocation());
           } else {
+              //getConfig().getString("failed_verify")
               p.kick("§cUID校验错误\n§cf如已换手机请与管理员联系");
           }
       }else{
           auth.register(n, String.valueOf(p.getClientId()));
+          //getConfig().getString("success_register")
           p.sendTip("§a已绑定您的设备ID，祝你游戏愉快\n§f如需要更换设备ID请联系管理员");
           p.teleport(stage.getSpawnLocation());
       }
@@ -319,4 +366,3 @@ public class Login extends PluginBase implements Listener{
       putTip(p.getName().toLowerCase(), s);
   }
 }
-
