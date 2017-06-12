@@ -10,6 +10,11 @@ import java.util.ArrayList;
   * Zon Project
   * author: azon
   * 2017.5.29
+  *
+  * Bad SQL statements in this class
+  * TODO 修复SQL语句
+  * 目前存在的问题: 
+  * 无法记录所有数据
   */
 
 public final class PasswordAuth implements AuthInterface{
