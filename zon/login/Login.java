@@ -191,6 +191,7 @@ public class Login extends PluginBase implements Listener{
   }
 
   public void onDisable(){
+      auth.close();
       if(buttons == null) return;
       Config c = new Config(
               new File(getDataFolder(), "buttons.yml"),
