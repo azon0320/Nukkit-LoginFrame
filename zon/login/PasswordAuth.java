@@ -100,11 +100,7 @@ public final class PasswordAuth implements AuthInterface{
 	}
 	
 	public void close(){
-		try{
-			db.close();
-		}catch(SQLException e){
-			
-		}
+		db.close();
 	}
 	
 	public boolean fix(String name, String old, String late){
