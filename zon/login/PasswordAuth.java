@@ -99,6 +99,14 @@ public final class PasswordAuth implements AuthInterface{
 		);
 	}
 	
+	public void close(){
+		try{
+			db.close();
+		}catch(SQLException e){
+			
+		}
+	}
+	
 	public boolean fix(String name, String old, String late){
 		if(!verify(name, old)) return false;
 		return db.exec(
