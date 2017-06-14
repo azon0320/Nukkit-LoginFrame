@@ -82,7 +82,7 @@ public final class PasswordAuth implements AuthInterface{
 	}
 	
 	public boolean addAuth(String name, String pass){
-		return isRegistered(name) && db.exec(
+		return db.exec(
 		"INSERT INTO auth(name, password)VALUES('" +
 		name + "', '" + pass + "');"
 		);
