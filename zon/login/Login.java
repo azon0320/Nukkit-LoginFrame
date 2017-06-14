@@ -116,6 +116,10 @@ public class Login extends PluginBase implements Listener{
       }
   }
 
+  public void printError(String err){
+      getLogger().notice(err);
+  }
+
   public void onLoad(){
       instance = this;
   }
@@ -353,12 +357,16 @@ public class Login extends PluginBase implements Listener{
               p.teleport(stage.getSpawnLocation());
           } else {
               //getConfig().getString("failed_verify")
-              p.kick("§cUID校验错误\n§cf如已换手机请与管理员联系");
+              p.kick("\n§cUID校验错误\n§f如已换手机请与管理员联系");
           }
       }else{
-          auth.register(n, String.valueOf(p.getClientId()));
-          //getConfig().getString("success_register")
-          p.sendTip("§a已绑定您的设备ID，祝你游戏愉快\n§f如需要更换设备ID请联系管理员");
+          boolean b = auth.register(n, String.valueOf(p.getClientId()));
+          if(b) {
+              //getConfig().getString("success_register")
+              p.sendTip("§a已绑定您的设备ID，祝你游戏愉快\n§f如需要更换设备ID请联系管理员");
+          }else{
+              p.sendMessage("§c设备验证失败 : SQL错误");
+          }
           p.teleport(stage.getSpawnLocation());
       }
   }
