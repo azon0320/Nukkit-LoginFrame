@@ -10,11 +10,10 @@ import cn.nukkit.event.entity.EntityTeleportEvent;
 import cn.nukkit.event.player.*;
 import cn.nukkit.utils.Config;
 
+import javafx.application.Preloader;
 import zon.SQLite3;
 
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.io.File;
 
 import cn.nukkit.Player;
@@ -68,6 +67,43 @@ public class Login extends PluginBase implements Listener{
             }
         }
     }
+
+    private class RemoveCommand extends Command{
+
+        public Login main;
+
+        public RemoveCommand(Login l){
+            super("logdel", "删除玩家帐号");
+            main = l;
+        }
+
+        public boolean execute(CommandSender sender, String label, String[] args){
+            if(!sender.isOp()){
+                sender.sendMessage("非法指令");
+                return false;
+            }
+            if(args.length < 1){
+                sender.sendMessage("参数错误 : /logdel <账号1> [账号2] [账号3]...");
+                return false;
+            }
+            for(int i = 0; i < args.length; i++) {
+                String n = args[i].trim().toLowerCase();
+                if (main.getAuth().isRegistered(n)) {
+                    if(main.getServer().getPlayerExact(n) != null) {
+                            main.getServer().getPlayerExact(n).kick("§c管理员已重置该账号的UID");
+                            main.getAuth().remove(n);
+                            sender.sendMessage("账号删除成功 : " + n);
+                    }else {
+                        main.getAuth().remove(n);
+                        sender.sendMessage("账号删除成功 : " + n);
+                    }
+                }else{
+                    sender.sendMessage("账号不存在 : " + n);
+                }
+            }
+            return true;
+        }
+    }
   
   public final int LOGIN_BUTTON = 0;
   public final int GET_INFO = 1;
@@ -96,6 +132,21 @@ public class Login extends PluginBase implements Listener{
   private Map<String, Integer> times;
 
   /**
+   * Events
+   * 事件驱动, 可以用其他插件实现2小时免登录等功能, 更适用于小游戏掉线重连
+   */
+
+    /**
+     * 登录后触发
+     */
+  private List<LoginListener> loginlisteners;
+
+    /**
+     * 登录前触发
+     */
+  private List<PreLoginListener> preloginlisteners;
+
+  /**
    * 即时按钮值
    * 未设置 : -1
    */
@@ -116,8 +167,8 @@ public class Login extends PluginBase implements Listener{
       }
   }
 
-  public void printError(String err){
-      getLogger().notice(err);
+  public PasswordAuth getAuth(){
+      return auth;
   }
 
   public void onLoad(){
@@ -169,16 +220,27 @@ public class Login extends PluginBase implements Listener{
         }
     }, 15);
     getServer().getCommandMap().register("LevelLogin" ,new LCommand(this));
+    getServer().getCommandMap().register("LevelLogin", new RemoveCommand(this));
     tips = new HashMap<>();
     times = new HashMap<String, Integer>();
     currentButton = -1;
+    preloginlisteners = new ArrayList<PreLoginListener>();
+    loginlisteners = new ArrayList<LoginListener>();
     getLogger().info("加载成功");
+  }
+
+  public void registerEvent(PreLoginListener p){
+      preloginlisteners.add(p);
+  }
+
+  public void registerEvent(LoginListener l){
+      loginlisteners.add(l);
   }
 
   /**
    * 客户端加载过程中会抛出NullPointerException
    * 每隔一段时间执行的函数故无需解决漏包问题
-   * */
+   */
   public void tick(){
       for(Player p : getServer().getOnlinePlayers().values()){
           String n = p.getName().toLowerCase();
@@ -188,7 +250,7 @@ public class Login extends PluginBase implements Listener{
           }else {
               times.put(n, times.get(n) - 1);
               try {
-                  p.sendTip(tips.get(n) + "\n§c你将在 §f" + times.get(n) + " §cs后被踢出");
+                  p.sendTip(tips.get(n) + "\n§c若不登录,你将在 §f" + times.get(n) + " §cs后被踢出");
               } catch (Exception e) {}
           }
       }
@@ -228,6 +290,11 @@ public class Login extends PluginBase implements Listener{
   
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   public void onPlayerPreJoin(PlayerPreLoginEvent e){
+    Iterator<PreLoginListener> i = preloginlisteners.iterator();
+    while(i.hasNext()){
+        boolean b = i.next().onPreLogin(e.getPlayer());
+        if(!b) return;
+    }
     putTip(e.getPlayer().getName().toLowerCase(), getConfig().getString("bottom_text"));
     times.put(e.getPlayer().getName().toLowerCase(), MAX_DELAY);
   }
@@ -286,13 +353,6 @@ public class Login extends PluginBase implements Listener{
           b.setCancelled();
       }
   }
- 
- @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
- public void onPlayerChat(PlayerChatEvent e){
-     if(!isLogged(e.getPlayer().getName().toLowerCase())){
-         e.setCancelled();
-     }
- }
 
   @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
   public void onPlayerPlaceEvent(BlockPlaceEvent e){
@@ -362,19 +422,23 @@ public class Login extends PluginBase implements Listener{
               p.sendTip("§a你已登录成功,传送你到主大厅 > " + stage.getFolderName());
               //showPlayer(p);
               p.teleport(stage.getSpawnLocation());
+              Iterator<LoginListener> i = loginlisteners.iterator();
+              while(i.hasNext()){
+                  i.next().onLogin(p);
+              }
           } else {
               //getConfig().getString("failed_verify")
               p.kick("\n§cUID校验错误\n§f如已换手机请与管理员联系");
           }
       }else{
-          boolean b = auth.register(n, String.valueOf(p.getClientId()));
-          if(b) {
-              //getConfig().getString("success_register")
-              p.sendTip("§a已绑定您的设备ID，祝你游戏愉快\n§f如需要更换设备ID请联系管理员");
-          }else{
-              p.sendMessage("§c设备验证失败 : SQL错误");
-          }
+          auth.register(n, String.valueOf(p.getClientId()));
+          //getConfig().getString("success_register")
+          p.sendTip("§a已绑定您的设备ID，祝你游戏愉快\n§f如需要更换设备ID请联系管理员");
           p.teleport(stage.getSpawnLocation());
+          Iterator<LoginListener> i = loginlisteners.iterator();
+          while(i.hasNext()){
+              i.next().onLogin(p);
+          }
       }
   }
 
