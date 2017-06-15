@@ -286,6 +286,13 @@ public class Login extends PluginBase implements Listener{
           b.setCancelled();
       }
   }
+ 
+ @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+ public void onPlayerChat(PlayerChatEvent e){
+     if(!isLogged(e.getPlayer().getName().toLowerCase())){
+         e.setCancelled();
+     }
+ }
 
   @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
   public void onPlayerPlaceEvent(BlockPlaceEvent e){
