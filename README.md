@@ -2,7 +2,7 @@
 azon
 <br />
 TODOs:<br />
-> * 修复SQL语句存储
+> * 基本上修复完毕, 谢谢大家支持
 ---
 ##介绍
 > * 这是一个提供了ClientID登录接口的Nukkit插件
